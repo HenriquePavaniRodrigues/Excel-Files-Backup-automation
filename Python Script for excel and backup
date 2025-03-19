@@ -2,7 +2,13 @@ import pandas as pd
 import glob
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# Mapeamento manual dos nomes dos meses em português
+meses_corretos = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+]
 
 # Obtém o caminho da pasta Downloads do usuário atual
 pasta = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -29,21 +35,21 @@ if os.path.exists(caminho_saida):
     os.remove(caminho_saida)
 
 df_final.to_csv(caminho_saida, index=False, sep=";", encoding="utf-8-sig")
-
 print(f"Arquivo consolidado salvo em: {caminho_saida}")
 
 # Renomear o arquivo "mrp8009g_ps_list.csv" para "scm420g_suggestions.csv"
 arquivo_antigo = os.path.join(pasta, "mrp8009g_ps_list.csv")
 arquivo_novo = os.path.join(pasta, "scm420g_suggestions.csv")
 
-if os.path.exists(arquivo_antigo):  # Verifica se o arquivo existe antes de renomear
+if os.path.exists(arquivo_antigo):
     os.rename(arquivo_antigo, arquivo_novo)
     print(f"Arquivo renomeado para: {arquivo_novo}")
 else:
     print("Arquivo 'mrp8009g_ps_list.csv' não encontrado na pasta.")
 
 # 🛠 Mover os arquivos para a pasta de destino
-pasta_destino = r"\\arqsv0\sl\PlanLogistica\INDICADORES\DASHBOARDs\PROJETO GERENCIAL\Extracao GTPLAN"
+pasta_destino_base = r"\\arqsv0\sl\PlanLogistica\INDICADORES\DASHBOARDs\PROJETO GERENCIAL\Extracao GTPLAN\historico_extracao\2025"
+pasta_destino_secundaria = r"\\arqsv0\sl\PlanLogistica\INDICADORES\DASHBOARDs\PROJETO GERENCIAL\Extracao GTPLAN"
 
 arquivos_para_mover = [
     "scm586g_followup.csv",
@@ -52,48 +58,77 @@ arquivos_para_mover = [
     "sku (1).csv"
 ]
 
+# Obtém a data atual
+data_atual = datetime.now()
+nome_mes = meses_corretos[data_atual.month - 1]
+
+pasta_mes = os.path.join(pasta_destino_base, nome_mes)
+if not os.path.exists(pasta_mes):
+    os.makedirs(pasta_mes)
+
+pasta_dia = os.path.join(pasta_mes, data_atual.strftime("%d.%m"))
+if not os.path.exists(pasta_dia):
+    os.makedirs(pasta_dia)
+
+# Mover arquivos principais
+temp_files = []
 for arquivo in arquivos_para_mover:
     origem = os.path.join(pasta, arquivo)
-    destino = os.path.join(pasta_destino, arquivo)
+    destino = os.path.join(pasta_dia, arquivo)
     
-    if os.path.exists(origem):  # Verifica se o arquivo existe antes de mover
+    if os.path.exists(origem):
         shutil.move(origem, destino)
         print(f"Arquivo movido para: {destino}")
+        temp_files.append(destino)
     else:
         print(f"Arquivo '{arquivo}' não encontrado na pasta de Downloads.")
 
-# 🛠 Criar Backup dos arquivos CSV na pasta GTPlan com a data do arquivo
-pasta_backup_gtplan = r"C:\Users\DRT78473\OneDrive - Hospital Albert Einstein\Documentos\DevDesk\Backup\GTPlan"
+# Mover arquivos "result*.csv"
+for arquivo in arquivos:
+    nome_arquivo = os.path.basename(arquivo)
+    destino = os.path.join(pasta_dia, nome_arquivo)
+    shutil.move(arquivo, destino)
+    print(f"Arquivo de origem movido para: {destino}")
 
+# Mover arquivos para a pasta secundária
 for arquivo in arquivos_para_mover:
-    origem = os.path.join(pasta_destino, arquivo)
+    origem = os.path.join(pasta_dia, arquivo)
+    destino = os.path.join(pasta_destino_secundaria, arquivo)
     
-    if os.path.exists(origem):  # Verifica se o arquivo existe antes de copiar
-        data_modificacao = datetime.fromtimestamp(os.path.getmtime(origem)).strftime("%d-%m-%Y")
-        destino = os.path.join(pasta_backup_gtplan, f"{arquivo.split('.')[0]} - {data_modificacao}.csv")
-        shutil.copy2(origem, destino)  # Copia mantendo metadata do arquivo
-        print(f"Backup criado em: {destino}")
+    if os.path.exists(origem):
+        shutil.copy2(origem, destino)
+        print(f"Arquivo copiado para: {destino}")
     else:
-        print(f"Arquivo '{arquivo}' não encontrado na pasta de destino.")
+        print(f"Arquivo '{arquivo}' não encontrado para copiar.")
 
-# 🛠 Criar Backup dos arquivos PBIX na pasta PowerBI com a data do arquivo
-pasta_backup_powerbi = r"C:\Users\DRT78473\OneDrive - Hospital Albert Einstein\Documentos\DevDesk\Backup\PowerBI"
+# 📌 Copiar arquivos .pbix para backup
 pasta_origem_pbix = r"\\arqsv0\sl\PlanLogistica\INDICADORES\DASHBOARDs\PROJETO GERENCIAL"
+pasta_backup_pbix = r"C:\Users\DRT78473\OneDrive - Hospital Albert Einstein\Documentos\DevDesk\Backup\PowerBI"
 
-arquivos_pbix = [
-    "Planejamento.pbix",
-    "NS_analise_Ok.pbix"
-]
+arquivos_pbix = ["Planejamento.pbix", "NS_analise_Ok.pbix"]
+
+data_formatada = data_atual.strftime("%d-%m-%Y")
 
 for arquivo in arquivos_pbix:
     origem = os.path.join(pasta_origem_pbix, arquivo)
+    destino = os.path.join(pasta_backup_pbix, f"{os.path.splitext(arquivo)[0]} - {data_formatada}.pbix")
     
-    if os.path.exists(origem):  # Verifica se o arquivo existe antes de copiar
-        data_modificacao = datetime.fromtimestamp(os.path.getmtime(origem)).strftime("%d-%m-%Y")
-        destino = os.path.join(pasta_backup_powerbi, f"{arquivo.split('.')[0]} - {data_modificacao}.pbix")
-        shutil.copy2(origem, destino)  # Copia mantendo metadata do arquivo
-        print(f"Backup criado em: {destino}")
+    if os.path.exists(origem):
+        shutil.copy2(origem, destino)
+        print(f"Backup criado: {destino}")
     else:
-        print(f"Arquivo '{arquivo}' não encontrado na pasta de origem: {pasta_origem_pbix}")
+        print(f"Arquivo '{arquivo}' não encontrado para backup.")
+
+# 🗑 Remover arquivos antigos do backup
+limite_dias = 7
+agora = datetime.now()
+
+for arquivo in os.listdir(pasta_backup_pbix):
+    caminho_arquivo = os.path.join(pasta_backup_pbix, arquivo)
+    if os.path.isfile(caminho_arquivo):
+        data_modificacao = datetime.fromtimestamp(os.path.getmtime(caminho_arquivo))
+        if (agora - data_modificacao).days > limite_dias:
+            os.remove(caminho_arquivo)
+            print(f"Arquivo antigo removido: {caminho_arquivo}")
 
 print("✅ Processo concluído com sucesso!")
